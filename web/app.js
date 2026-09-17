@@ -803,24 +803,36 @@
     render();
   }
   var sideMenu = $("#side-menu");
+  var sideMenuBtn = $("#btn-side-menu");
   function closeSideMenu() {
     if (sideMenu && !sideMenu.hidden)
       sideMenu.hidden = true;
+    sideMenuBtn?.setAttribute("aria-expanded", "false");
   }
-  function openSideMenu(x, y) {
+  function placeSideMenu(anchor) {
+    const { offsetWidth: w, offsetHeight: h } = sideMenu;
+    if (anchor.el) {
+      const r = anchor.el.getBoundingClientRect();
+      sideMenu.style.left = Math.max(4, Math.min(r.right - w, innerWidth - w - 4)) + "px";
+      sideMenu.style.top = r.bottom + 4 + "px";
+    } else {
+      sideMenu.style.left = Math.max(4, anchor.x + w > innerWidth - 4 ? anchor.x - w : anchor.x) + "px";
+      sideMenu.style.top = Math.max(4, anchor.y + h > innerHeight - 4 ? anchor.y - h : anchor.y) + "px";
+    }
+  }
+  function openSideMenu(anchor) {
     if (!sideMenu)
       return;
     const onRight = document.body.classList.contains("side-right");
     sideMenu.replaceChildren();
-    const btn = document.createElement("button");
-    btn.className = "side-menu-item";
-    btn.setAttribute("role", "menuitem");
-    btn.textContent = onRight ? "Move Sidebar to Left" : "Move Sidebar to Right";
-    sideMenu.append(btn);
+    const item = document.createElement("button");
+    item.className = "side-menu-item";
+    item.setAttribute("role", "menuitem");
+    item.textContent = onRight ? "Move Sidebar to Left" : "Move Sidebar to Right";
+    sideMenu.append(item);
     sideMenu.hidden = false;
-    const { offsetWidth: w, offsetHeight: h } = sideMenu;
-    sideMenu.style.left = Math.max(4, x + w > innerWidth - 4 ? x - w : x) + "px";
-    sideMenu.style.top = Math.max(4, y + h > innerHeight - 4 ? y - h : y) + "px";
+    placeSideMenu(anchor);
+    sideMenuBtn?.setAttribute("aria-expanded", "true");
   }
   function initPanels() {
     $("#btn-reindex").addEventListener("click", async () => {
@@ -857,6 +869,13 @@
         }
       });
     })();
+    sideMenuBtn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (sideMenu && !sideMenu.hidden)
+        closeSideMenu();
+      else
+        openSideMenu({ el: sideMenuBtn });
+    });
     document.addEventListener("contextmenu", (e) => {
       if (sideMenu && sideMenu.contains(e.target)) {
         e.preventDefault();
@@ -865,7 +884,7 @@
       if (!e.target.closest("#side") || e.target.closest("a"))
         return;
       e.preventDefault();
-      openSideMenu(e.clientX, e.clientY);
+      openSideMenu({ x: e.clientX, y: e.clientY });
     });
     addEventListener("keydown", (e) => {
       if (e.key === "Escape")
@@ -882,8 +901,11 @@
         showToast("✓", "Sidebar moved to " + (document.body.classList.contains("side-right") ? "right" : "left"));
       });
       document.addEventListener("mousedown", (e) => {
-        if (!sideMenu.hidden && !sideMenu.contains(e.target))
-          closeSideMenu();
+        if (sideMenu.hidden)
+          return;
+        if (sideMenu.contains(e.target) || sideMenuBtn && sideMenuBtn.contains(e.target))
+          return;
+        closeSideMenu();
       }, true);
       addEventListener("resize", closeSideMenu);
       addEventListener("blur", closeSideMenu);

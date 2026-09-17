@@ -21,27 +21,41 @@ export function showPanel(name) {
 }
 
 const sideMenu = $('#side-menu');
+const sideMenuBtn = $('#btn-side-menu');
 
 function closeSideMenu() {
   if (sideMenu && !sideMenu.hidden) sideMenu.hidden = true;
+  sideMenuBtn?.setAttribute('aria-expanded', 'false');
 }
 
-/* The sidebar's right-click menu, at the pointer. One action for now: move the
-   panel to the other side. */
-function openSideMenu(x, y) {
+/* Place the menu right-aligned under the ⋯ button, or at the pointer, flipping
+   at the window's edges. */
+function placeSideMenu(anchor) {
+  const w = sideMenu.offsetWidth, h = sideMenu.offsetHeight;
+  if (anchor.el) {
+    const r = anchor.el.getBoundingClientRect();
+    sideMenu.style.left = Math.max(4, Math.min(r.right - w, innerWidth - w - 4)) + 'px';
+    sideMenu.style.top = (r.bottom + 4) + 'px';
+  } else {
+    sideMenu.style.left = Math.max(4, anchor.x + w > innerWidth - 4 ? anchor.x - w : anchor.x) + 'px';
+    sideMenu.style.top = Math.max(4, anchor.y + h > innerHeight - 4 ? anchor.y - h : anchor.y) + 'px';
+  }
+}
+
+/* The sidebar's settings menu. The header's ⋯ button opens it under the button;
+   a right click on the panel opens it at the pointer. */
+function openSideMenu(anchor) {
   if (!sideMenu) return;
   const onRight = document.body.classList.contains('side-right');
   sideMenu.replaceChildren();
-  const btn = document.createElement('button');
-  btn.className = 'side-menu-item';
-  btn.setAttribute('role', 'menuitem');
-  btn.textContent = onRight ? 'Move Sidebar to Left' : 'Move Sidebar to Right';
-  sideMenu.append(btn);
+  const item = document.createElement('button');
+  item.className = 'side-menu-item';
+  item.setAttribute('role', 'menuitem');
+  item.textContent = onRight ? 'Move Sidebar to Left' : 'Move Sidebar to Right';
+  sideMenu.append(item);
   sideMenu.hidden = false;
-  // Open toward the pointer's bottom-right, flipping at the window's edges.
-  const w = sideMenu.offsetWidth, h = sideMenu.offsetHeight;
-  sideMenu.style.left = Math.max(4, x + w > innerWidth - 4 ? x - w : x) + 'px';
-  sideMenu.style.top = Math.max(4, y + h > innerHeight - 4 ? y - h : y) + 'px';
+  placeSideMenu(anchor);
+  sideMenuBtn?.setAttribute('aria-expanded', 'true');
 }
 
 export function initPanels() {
@@ -68,13 +82,19 @@ export function initPanels() {
     addEventListener('mouseup', () => { if (dragging) { dragging = false; rz.classList.remove('drag'); layout(); render(); } });
   })();
 
-  /* Right-click on the sidebar opens its menu. Footer links keep the browser's
-     own menu, so "open in new tab" still works on them. */
+  /* The ⋯ button in the header toggles the menu; a right click on the sidebar
+     opens it at the pointer. Footer links keep the browser's own menu, so
+     "open in new tab" still works on them. */
+  sideMenuBtn?.addEventListener('click', e => {
+    e.stopPropagation();
+    if (sideMenu && !sideMenu.hidden) closeSideMenu();
+    else openSideMenu({ el: sideMenuBtn });
+  });
   document.addEventListener('contextmenu', e => {
     if (sideMenu && sideMenu.contains(e.target)) { e.preventDefault(); return; }
     if (!e.target.closest('#side') || e.target.closest('a')) return;
     e.preventDefault();
-    openSideMenu(e.clientX, e.clientY);
+    openSideMenu({ x: e.clientX, y: e.clientY });
   });
   addEventListener('keydown', e => { if (e.key === 'Escape') closeSideMenu(); });
 
@@ -86,7 +106,11 @@ export function initPanels() {
       if (sidebarToggle) sidebarToggle();
       showToast('✓', 'Sidebar moved to ' + (document.body.classList.contains('side-right') ? 'right' : 'left'));
     });
-    document.addEventListener('mousedown', e => { if (!sideMenu.hidden && !sideMenu.contains(e.target)) closeSideMenu(); }, true);
+    document.addEventListener('mousedown', e => {
+      if (sideMenu.hidden) return;
+      if (sideMenu.contains(e.target) || (sideMenuBtn && sideMenuBtn.contains(e.target))) return;
+      closeSideMenu();
+    }, true);
     addEventListener('resize', closeSideMenu);
     addEventListener('blur', closeSideMenu);
     document.addEventListener('scroll', closeSideMenu, true);
